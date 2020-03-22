@@ -1,10 +1,19 @@
 # Lazy Evaluation
+![build](https://travis-ci.org/jqqqqqqqqqq/python-lazy-async.svg?branch=master)
+![shields](https://img.shields.io/badge/python-3.7%2B-blue.svg?style=flat-square)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg?style=flat-square)](https://opensource.org/licenses/MIT)
 
 Lazy evaluate function/class method/class property getter. The target will be evaluated once and only once on first call
 , and concurrent calls will get the result immediately once the target is ready and gets the same exception when the target
 raises some exception.
 
 Compatible with both sync and async.
+
+## Installation
+
+```bash
+pip install lazy-async
+```
 
 ## Example
 
