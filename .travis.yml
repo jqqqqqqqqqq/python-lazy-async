@@ -1,0 +1,13 @@
+dist: bionic
+language: python
+cache: pip
+python:
+  - "3.7"
+  - "3.8"
+  - "3.8-dev"  # 3.8 development branch
+  - "nightly"  # nightly build
+# command to run tests
+install:
+  - pip install -Ue '.[tests]'
+script:
+  - pytest -vv -r a -l --color=yes
