@@ -22,11 +22,21 @@ class lazy:
         if cached_name in inst.__dict__:
             if self.is_async:
                 async def foo():
-                    return await inst.__dict__[cached_name]
+                    cache = inst.__dict__[cached_name]
+                    if isinstance(cache, asyncio.Future):
+                        return await cache
+                    else:
+                        return cache
 
                 return foo
             else:
-                return lambda: inst.__dict__[cached_name].result()
+                def foo():
+                    cache = inst.__dict__[cached_name]
+                    if isinstance(cache, concurrent.futures.Future):
+                        return inst.__dict__[cached_name].result()
+                    else:
+                        return inst.__dict__[cached_name]
+                return foo
         else:
             if self.is_async:
                 inst.__dict__[cached_name] = asyncio.Future()
@@ -43,6 +53,7 @@ class lazy:
                     raise e
 
                 inst.__dict__[cached_name].set_result(res)
+                inst.__dict__[cached_name] = res
                 return res
 
             return foo
@@ -54,6 +65,7 @@ class lazy:
                 raise e
 
             inst.__dict__[cached_name].set_result(res)
+            inst.__dict__[cached_name] = res
             return lambda: res
 
 
@@ -77,9 +89,20 @@ class lazy_property:
         cached_name = '__cached__' + self.__name__
         if cached_name in obj.__dict__:
             if is_async:
-                return obj.__dict__[cached_name]
+                async def foo():
+                    cache = obj.__dict__[cached_name]
+                    if isinstance(cache, asyncio.Future):
+                        return await cache
+                    else:
+                        return cache
+
+                return foo()
             else:
-                return obj.__dict__[cached_name].result()
+                cache = obj.__dict__[cached_name]
+                if isinstance(cache, concurrent.futures.Future):
+                    return cache.result()
+                else:
+                    return cache
         else:
             if is_async:
                 obj.__dict__[cached_name] = asyncio.Future()
@@ -96,6 +119,7 @@ class lazy_property:
                     raise e
 
                 obj.__dict__[cached_name].set_result(res)
+                obj.__dict__[cached_name] = res
                 return res
 
             return foo()
@@ -107,6 +131,7 @@ class lazy_property:
                 raise e
 
             obj.__dict__[cached_name].set_result(res)
+            obj.__dict__[cached_name] = res
             return res
 
     def __set__(self, obj, value):
