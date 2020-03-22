@@ -2,71 +2,79 @@ import asyncio
 import concurrent.futures
 from functools import wraps
 
-__ALL__ = ['lazy', 'lazy_property']
+__ALL__ = ['lazy', 'lazy_property', 'lazy_async', 'lazy_property_async']
 
 
 class lazy:
     def __init__(self, func):
-        self.__func = func
-        wraps(self.__func)(self)
-        self.is_async = asyncio.iscoroutinefunction(func)
+        self.fget = func
+        wraps(self.fget)(self)
 
-    def __get__(self, inst, inst_cls):
-        if inst is None:
+    def __get__(self, obj, objtype):
+        if obj is None:
             return self
 
-        if not hasattr(inst, '__dict__'):
-            raise AttributeError("'%s' object has no attribute '__dict__'" % (inst_cls.__name__,))
+        if not hasattr(obj, '__dict__'):
+            raise AttributeError("'%s' object has no attribute '__dict__'" % (objtype.__name__,))
 
         cached_name = '__cached__' + self.__name__
-        if cached_name in inst.__dict__:
-            if self.is_async:
-                async def foo():
-                    cache = inst.__dict__[cached_name]
-                    if isinstance(cache, asyncio.Future):
-                        return await cache
-                    else:
-                        return cache
+        cache = obj.__dict__.get(cached_name)  # get is atomic
 
-                return foo
-            else:
-                def foo():
-                    cache = inst.__dict__[cached_name]
-                    if isinstance(cache, concurrent.futures.Future):
-                        return inst.__dict__[cached_name].result()
-                    else:
-                        return inst.__dict__[cached_name]
-                return foo
+        if cache:
+            return lambda: cache.result()
         else:
-            if self.is_async:
-                inst.__dict__[cached_name] = asyncio.Future()
-            else:
-                inst.__dict__[cached_name] = concurrent.futures.Future()
+            future = concurrent.futures.Future()
+            obj.__dict__.setdefault(cached_name, future)  # atomic set
+            cache = obj.__dict__.get(cached_name)
+            if cache is not future:  # only one future is set, so only execute once is guaranteed
+                return lambda: cache.result()
 
-        if self.is_async:
-            async def foo():
-                inst.__dict__[cached_name] = asyncio.Future()
-                try:
-                    res = await self.__func(inst)
-                except Exception as e:
-                    inst.__dict__[cached_name].set_exception(e)
-                    raise e
+        try:
+            res = self.fget(obj)
+        except Exception as e:
+            cache.set_exception(e)
+            raise e
 
-                inst.__dict__[cached_name].set_result(res)
-                inst.__dict__[cached_name] = res
-                return res
+        cache.set_result(res)  # notify all futures
+        return lambda: res
 
+
+class lazy_async:
+    def __init__(self, func):
+        self.fget = func
+        wraps(self.fget)(self)
+
+    def __get__(self, obj, objtype):
+        if obj is None:
+            return self
+
+        if not hasattr(obj, '__dict__'):
+            raise AttributeError("'%s' object has no attribute '__dict__'" % (objtype.__name__,))
+
+        cached_name = '__cached__' + self.__name__
+
+        cache = obj.__dict__.get(cached_name)
+
+        async def foo():
+            return await cache
+
+        if cache:
             return foo
         else:
+            cache = asyncio.Future()
+            obj.__dict__[cached_name] = cache
+
+        async def bar():
             try:
-                res = self.__func(inst)
+                res = await self.fget(obj)
             except Exception as e:
-                inst.__dict__[cached_name].set_exception(e)
+                cache.set_exception(e)
                 raise e
 
-            inst.__dict__[cached_name].set_result(res)
-            inst.__dict__[cached_name] = res
-            return lambda: res
+            cache.set_result(res)
+            return res
+
+        return bar
 
 
 class lazy_property:
@@ -85,62 +93,34 @@ class lazy_property:
         if self.fget is None:
             raise AttributeError("unreadable attribute")
 
-        is_async = asyncio.iscoroutinefunction(self.fget)
         cached_name = '__cached__' + self.__name__
-        if cached_name in obj.__dict__:
-            if is_async:
-                async def foo():
-                    cache = obj.__dict__[cached_name]
-                    if isinstance(cache, asyncio.Future):
-                        return await cache
-                    else:
-                        return cache
+        cache = obj.__dict__.get(cached_name)
 
-                return foo()
-            else:
-                cache = obj.__dict__[cached_name]
-                if isinstance(cache, concurrent.futures.Future):
-                    return cache.result()
-                else:
-                    return cache
+        if cache:
+            return cache.result()
         else:
-            if is_async:
-                obj.__dict__[cached_name] = asyncio.Future()
-            else:
-                obj.__dict__[cached_name] = concurrent.futures.Future()
+            future = concurrent.futures.Future()
+            obj.__dict__.setdefault(cached_name, future)
+            cache = obj.__dict__.get(cached_name)
+            if cache is not future:
+                return cache.result()
 
-        if is_async:
-            async def foo():
-                obj.__dict__[cached_name] = asyncio.Future()
-                try:
-                    res = await self.fget(obj)
-                except Exception as e:
-                    obj.__dict__[cached_name].set_exception(e)
-                    raise e
+        try:
+            res = self.fget(obj)
+        except Exception as e:
+            cache.set_exception(e)
+            raise e
 
-                obj.__dict__[cached_name].set_result(res)
-                obj.__dict__[cached_name] = res
-                return res
-
-            return foo()
-        else:
-            try:
-                res = self.fget(obj)
-            except Exception as e:
-                obj.__dict__[cached_name].set_exception(e)
-                raise e
-
-            obj.__dict__[cached_name].set_result(res)
-            obj.__dict__[cached_name] = res
-            return res
+        cache.set_result(res)
+        return res
 
     def __set__(self, obj, value):
         if self.fset is None:
             raise AttributeError("can't set attribute")
 
         cached_name = '__cached__' + self.__name__
-        if cached_name in obj.__dict__:
-            del obj.__dict__[cached_name]
+        obj.__dict__.pop(cached_name, None)
+
         self.fset(obj, value)
 
     def __delete__(self, obj):
@@ -148,8 +128,79 @@ class lazy_property:
             raise AttributeError("can't delete attribute")
 
         cached_name = '__cached__' + self.__name__
-        if cached_name in obj.__dict__:
-            del obj.__dict__[cached_name]
+        obj.__dict__.pop(cached_name, None)
+
+        self.fdel(obj)
+
+    def getter(self, fget):
+        return type(self)(fget, self.fset, self.fdel, self.__doc__)
+
+    def setter(self, fset):
+        return type(self)(self.fget, fset, self.fdel, self.__doc__)
+
+    def deleter(self, fdel):
+        return type(self)(self.fget, self.fset, fdel, self.__doc__)
+
+
+class lazy_property_async:
+    def __init__(self, fget=None, fset=None, fdel=None, doc=None):
+        self.fget = fget
+        self.fset = fset
+        self.fdel = fdel
+        if doc is None and fget is not None:
+            doc = fget.__doc__
+        self.__doc__ = doc
+        self.__name__ = fget.__name__
+
+    def __get__(self, obj, objtype=None):
+        if obj is None:
+            return self
+        if self.fget is None:
+            raise AttributeError("unreadable attribute")
+
+        cached_name = '__cached__' + self.__name__
+        cache = obj.__dict__.get(cached_name)
+
+        async def foo():
+            return await cache
+
+        if cache:
+            return foo()
+        else:
+            future = asyncio.Future()
+            obj.__dict__.setdefault(cached_name, future)
+            cache = obj.__dict__.get(cached_name)  # test
+            if cache is not future:
+                return foo()
+
+        async def foo():
+            try:
+                res = await self.fget(obj)
+            except Exception as e:
+                cache.set_exception(e)
+                raise e
+
+            cache.set_result(res)
+            return res
+
+        return foo()
+
+    def __set__(self, obj, value):
+        if self.fset is None:
+            raise AttributeError("can't set attribute")
+
+        cached_name = '__cached__' + self.__name__
+        obj.__dict__.pop(cached_name, None)
+
+        self.fset(obj, value)
+
+    def __delete__(self, obj):
+        if self.fdel is None:
+            raise AttributeError("can't delete attribute")
+
+        cached_name = '__cached__' + self.__name__
+        obj.__dict__.pop(cached_name, None)
+
         self.fdel(obj)
 
     def getter(self, fget):

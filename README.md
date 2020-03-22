@@ -7,7 +7,14 @@ Lazy evaluate function/class method/class property. The target will be evaluated
 , and concurrent calls will get the result immediately once the target is ready and gets the same exception when the target
 raises some exception.
 
-Compatible with both sync and async.
+## Features
+
+- Compatible with both sync and async
+
+- Lock free!!!! (thanks to asyncio.Future and concurrent.futures.Future, all the operations are atomic)
+
+- Async property must use sync setter and deleter for now, due to the limitation that python does not support await
+before assignment or `del`. `await setattr(foo, value)` is one possible workaround, but it introduces more obfuscation.
 
 ## Installation
 
@@ -18,10 +25,11 @@ pip install lazy-async
 ## Example
 
 ```python
-from lazy_async import lazy, lazy_property
 import asyncio
-import time
+from lazy_async import lazy, lazy_property, lazy_async, lazy_property_async
 from threading import Thread
+import time
+
 
 class ExampleClass:
     def __init__(self):
@@ -35,7 +43,7 @@ class ExampleClass:
         self.sync_called += 1
         return 'something'
 
-    @lazy
+    @lazy_async
     async def func2(self):
         await asyncio.sleep(5)
         self.async_called += 1
@@ -46,7 +54,7 @@ class ExampleClass:
         time.sleep(5)
         raise ValueError('SomeException')
 
-    @lazy
+    @lazy_async
     async def func4(self):
         await asyncio.sleep(5)
         raise ValueError('SomeException')
@@ -54,15 +62,17 @@ class ExampleClass:
     @lazy_property
     def func5(self):
         time.sleep(5)
+        self.sync_called += 1
         return self.prop
 
     @func5.setter
     def func5(self, value):
         self.prop = value
 
-    @lazy_property
+    @lazy_property_async
     async def func6(self):
         await asyncio.sleep(5)
+        self.async_called += 1
         return self.prop
 
     @func6.setter

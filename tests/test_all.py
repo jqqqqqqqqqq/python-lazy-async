@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from lazy_async import lazy, lazy_property
+from lazy_async import lazy, lazy_property, lazy_async, lazy_property_async
 from threading import Thread
 import time
 
@@ -17,7 +17,7 @@ class ExampleClass:
         self.sync_called += 1
         return 'something'
 
-    @lazy
+    @lazy_async
     async def func2(self):
         await asyncio.sleep(5)
         self.async_called += 1
@@ -28,7 +28,7 @@ class ExampleClass:
         time.sleep(5)
         raise ValueError('SomeException')
 
-    @lazy
+    @lazy_async
     async def func4(self):
         await asyncio.sleep(5)
         raise ValueError('SomeException')
@@ -36,15 +36,17 @@ class ExampleClass:
     @lazy_property
     def func5(self):
         time.sleep(5)
+        self.sync_called += 1
         return self.prop
 
     @func5.setter
     def func5(self, value):
         self.prop = value
 
-    @lazy_property
+    @lazy_property_async
     async def func6(self):
         await asyncio.sleep(5)
+        self.async_called += 1
         return self.prop
 
     @func6.setter
@@ -78,6 +80,7 @@ def test_something_sync():
     assert test1 == {1: 'something', 2: 'something'}
     time.sleep(5)
     assert test1 == {1: 'something', 2: 'something', 3: 'something'}
+    assert test_class.sync_called == 1
 
 
 def test_something_async():
@@ -106,6 +109,7 @@ def test_something_async():
         assert test2 == {1: 'something', 2: 'something'}
         await asyncio.sleep(5)
         assert test2 == {1: 'something', 2: 'something', 3: 'something'}
+        assert test_class.async_called == 1
 
     loop.run_until_complete(asyncio.gather(start1(), start2(), start3(), assert1()))
 
@@ -212,10 +216,12 @@ def test_something_property_sync():
     assert test5 == {1: 'nothing', 2: 'nothing'}
     time.sleep(3)
     assert test5 == {1: 'nothing', 2: 'nothing', 3: 'nothing'}
+    assert test_class.sync_called == 1
     time.sleep(2)
     assert test5 == {1: 'nothing', 2: 'nothing', 3: 'nothing'}
     time.sleep(5)
     assert test5 == {1: 'nothing', 2: 'nothing', 3: 'nothing', 4: 'something', 5: 'something'}
+    assert test_class.sync_called == 2
 
 
 def test_something_property_async():
@@ -253,9 +259,85 @@ def test_something_property_async():
         assert test6 == {1: 'nothing', 2: 'nothing'}
         await asyncio.sleep(3)
         assert test6 == {1: 'nothing', 2: 'nothing', 3: 'nothing'}
+        assert test_class.async_called == 1
         await asyncio.sleep(2)
         assert test6 == {1: 'nothing', 2: 'nothing', 3: 'nothing'}
         await asyncio.sleep(5)
         assert test6 == {1: 'nothing', 2: 'nothing', 3: 'nothing', 4: 'something', 5: 'something'}
+        assert test_class.async_called == 2
 
     loop.run_until_complete(asyncio.gather(start1(), start2(), start3(), start4(), start5(), assert1()))
+
+
+def test_something_sync_crazy():
+    test_class = ExampleClass()
+
+    def start():
+        assert test_class.func1() == 'something'
+
+    [Thread(target=start).start() for _ in range(2000)]
+    time.sleep(6)
+    assert test_class.sync_called == 1
+
+
+def test_something_async_crazy():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    test_class = ExampleClass()
+
+    async def start():
+        assert await test_class.func2() == 'something'
+
+    loop.run_until_complete(asyncio.gather(*[start() for _ in range(2000)]))
+
+    assert test_class.async_called == 1
+
+
+def test_something_property_sync_crazy():
+    test_class = ExampleClass()
+    count = 0
+
+    def start():
+        nonlocal count
+        assert test_class.func5 == 'nothing'
+        count += 1
+
+    [Thread(target=start).start() for _ in range(2000)]
+    time.sleep(15)  # safe value due to performance issue
+    assert count == 2000
+    assert test_class.sync_called == 1
+
+    test_class.func5 = 'something'
+    count = 0
+
+    def start2():
+        nonlocal count
+        assert test_class.func5 == 'something'
+        count += 1
+
+    [Thread(target=start2).start() for _ in range(2000)]
+    time.sleep(15)  # safe value due to performance issue
+    assert count == 2000
+    assert test_class.sync_called == 2
+
+
+def test_something_property_async_crazy():
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    test_class = ExampleClass()
+
+    async def start():
+        assert await test_class.func6 == 'nothing'
+
+    loop.run_until_complete(asyncio.gather(*[start() for _ in range(2000)]))
+
+    assert test_class.async_called == 1
+
+    test_class.func6 = 'something'
+
+    async def start2():
+        assert await test_class.func6 == 'something'
+
+    loop.run_until_complete(asyncio.gather(*[start2() for _ in range(2000)]))
+
+    assert test_class.async_called == 2
