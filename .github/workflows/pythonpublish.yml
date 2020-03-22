@@ -26,6 +26,7 @@ jobs:
       run: |
         python3 setup.py build sdist
         pip install .
+        pip install pytest
     - name: Test
       run: |
         pytest -vv -r a -l --color=yes
