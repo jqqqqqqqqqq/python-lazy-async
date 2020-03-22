@@ -119,7 +119,9 @@ class lazy_property:
             raise AttributeError("can't set attribute")
 
         cached_name = '__cached__' + self.__name__
-        obj.__dict__.pop(cached_name, None)
+        cache = concurrent.futures.Future()
+        obj.__dict__[cached_name] = cache
+        cache.set_result(value)
 
         self.fset(obj, value)
 
@@ -190,7 +192,9 @@ class lazy_property_async:
             raise AttributeError("can't set attribute")
 
         cached_name = '__cached__' + self.__name__
-        obj.__dict__.pop(cached_name, None)
+        cache = asyncio.Future()
+        obj.__dict__[cached_name] = cache
+        cache.set_result(value)
 
         self.fset(obj, value)
 

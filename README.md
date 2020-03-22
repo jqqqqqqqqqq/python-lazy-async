@@ -9,9 +9,11 @@ raises some exception.
 
 ## Features
 
-- Compatible with both sync and async
+- Implemented both sync and async version.
 
 - Lock free!!!! (thanks to asyncio.Future and concurrent.futures.Future, all the operations are atomic)
+
+- Assign will update cache immediately.
 
 - Async property must use sync setter and deleter for now, due to the limitation that python does not support await
 before assignment or `del`. `await setattr(foo, value)` is one possible workaround, but it introduces more obfuscation.

@@ -200,7 +200,7 @@ def test_something_property_sync():
         test5[4] = test_class.func5
 
     def start5():
-        time.sleep(12)
+        time.sleep(11)
         test5[5] = test_class.func5
 
     Thread(target=start1).start()
@@ -214,14 +214,14 @@ def test_something_property_sync():
     assert test5 == {}
     time.sleep(2)
     assert test5 == {1: 'nothing', 2: 'nothing'}
-    time.sleep(3)
+    time.sleep(2)
     assert test5 == {1: 'nothing', 2: 'nothing', 3: 'nothing'}
     assert test_class.sync_called == 1
     time.sleep(2)
-    assert test5 == {1: 'nothing', 2: 'nothing', 3: 'nothing'}
-    time.sleep(5)
+    assert test5 == {1: 'nothing', 2: 'nothing', 3: 'nothing', 4: 'something'}
+    time.sleep(2)
     assert test5 == {1: 'nothing', 2: 'nothing', 3: 'nothing', 4: 'something', 5: 'something'}
-    assert test_class.sync_called == 2
+    assert test_class.sync_called == 1
 
 
 def test_something_property_async():
@@ -247,7 +247,7 @@ def test_something_property_async():
         test6[4] = await test_class.func6
 
     async def start5():
-        await asyncio.sleep(12)
+        await asyncio.sleep(11)
         test6[5] = await test_class.func6
 
     async def assert1():
@@ -257,14 +257,14 @@ def test_something_property_async():
         assert test6 == {}
         await asyncio.sleep(2)
         assert test6 == {1: 'nothing', 2: 'nothing'}
-        await asyncio.sleep(3)
+        await asyncio.sleep(2)
         assert test6 == {1: 'nothing', 2: 'nothing', 3: 'nothing'}
         assert test_class.async_called == 1
         await asyncio.sleep(2)
-        assert test6 == {1: 'nothing', 2: 'nothing', 3: 'nothing'}
-        await asyncio.sleep(5)
+        assert test6 == {1: 'nothing', 2: 'nothing', 3: 'nothing', 4: 'something'}
+        await asyncio.sleep(2)
         assert test6 == {1: 'nothing', 2: 'nothing', 3: 'nothing', 4: 'something', 5: 'something'}
-        assert test_class.async_called == 2
+        assert test_class.async_called == 1
 
     loop.run_until_complete(asyncio.gather(start1(), start2(), start3(), start4(), start5(), assert1()))
 
@@ -318,7 +318,7 @@ def test_something_property_sync_crazy():
     [Thread(target=start2).start() for _ in range(2000)]
     time.sleep(15)  # safe value due to performance issue
     assert count == 2000
-    assert test_class.sync_called == 2
+    assert test_class.sync_called == 1
 
 
 def test_something_property_async_crazy():
@@ -340,4 +340,4 @@ def test_something_property_async_crazy():
 
     loop.run_until_complete(asyncio.gather(*[start2() for _ in range(2000)]))
 
-    assert test_class.async_called == 2
+    assert test_class.async_called == 1

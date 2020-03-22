@@ -9,7 +9,7 @@ long_description = open('README.md', encoding="utf-8").read()
 setup(
     name='lazy-async',
     packages=find_packages(include=['lazy_async', 'lazy_async.*']),
-    version=0.6,
+    version=0.7,
     description='Lazy evaluation for function/method/property getter',
     long_description=long_description,
     long_description_content_type='text/markdown',
