@@ -1,6 +1,6 @@
 import pytest
 import asyncio
-from lazy_async import lazy, lazy_getter
+from lazy_async import lazy, lazy_property
 from threading import Thread
 import time
 
@@ -9,6 +9,7 @@ class ExampleClass:
     def __init__(self):
         self.sync_called = 0
         self.async_called = 0
+        self.prop = 'nothing'
 
     @lazy
     def func1(self):
@@ -32,15 +33,23 @@ class ExampleClass:
         await asyncio.sleep(5)
         raise ValueError('SomeException')
 
-    @lazy_getter
+    @lazy_property
     def func5(self):
         time.sleep(5)
-        return 'something'
+        return self.prop
 
-    @lazy_getter
+    @func5.setter
+    def func5(self, value):
+        self.prop = value
+
+    @lazy_property
     async def func6(self):
         await asyncio.sleep(5)
-        return 'something'
+        return self.prop
+
+    @func6.setter
+    def func6(self, value):
+        self.prop = value
 
 
 def test_something_sync():
@@ -178,20 +187,35 @@ def test_something_property_sync():
         test5[2] = test_class.func5
 
     def start3():
-        time.sleep(10)
+        time.sleep(7)
         test5[3] = test_class.func5
+
+    def start4():
+        time.sleep(9)
+        test_class.func5 = 'something'
+        test5[4] = test_class.func5
+
+    def start5():
+        time.sleep(12)
+        test5[5] = test_class.func5
 
     Thread(target=start1).start()
     Thread(target=start2).start()
     Thread(target=start3).start()
+    Thread(target=start4).start()
+    Thread(target=start5).start()
     time.sleep(1)
     assert test5 == {}
     time.sleep(3)
     assert test5 == {}
     time.sleep(2)
-    assert test5 == {1: 'something', 2: 'something'}
+    assert test5 == {1: 'nothing', 2: 'nothing'}
+    time.sleep(3)
+    assert test5 == {1: 'nothing', 2: 'nothing', 3: 'nothing'}
+    time.sleep(2)
+    assert test5 == {1: 'nothing', 2: 'nothing', 3: 'nothing'}
     time.sleep(5)
-    assert test5 == {1: 'something', 2: 'something', 3: 'something'}
+    assert test5 == {1: 'nothing', 2: 'nothing', 3: 'nothing', 4: 'something', 5: 'something'}
 
 
 def test_something_property_async():
@@ -208,8 +232,17 @@ def test_something_property_async():
         test6[2] = await test_class.func6
 
     async def start3():
-        await asyncio.sleep(10)
+        await asyncio.sleep(7)
         test6[3] = await test_class.func6
+
+    async def start4():
+        await asyncio.sleep(9)
+        test_class.func6 = 'something'
+        test6[4] = await test_class.func6
+
+    async def start5():
+        await asyncio.sleep(12)
+        test6[5] = await test_class.func6
 
     async def assert1():
         await asyncio.sleep(1)
@@ -217,8 +250,12 @@ def test_something_property_async():
         await asyncio.sleep(3)
         assert test6 == {}
         await asyncio.sleep(2)
-        assert test6 == {1: 'something', 2: 'something'}
+        assert test6 == {1: 'nothing', 2: 'nothing'}
+        await asyncio.sleep(3)
+        assert test6 == {1: 'nothing', 2: 'nothing', 3: 'nothing'}
+        await asyncio.sleep(2)
+        assert test6 == {1: 'nothing', 2: 'nothing', 3: 'nothing'}
         await asyncio.sleep(5)
-        assert test6 == {1: 'something', 2: 'something', 3: 'something'}
+        assert test6 == {1: 'nothing', 2: 'nothing', 3: 'nothing', 4: 'something', 5: 'something'}
 
-    loop.run_until_complete(asyncio.gather(start1(), start2(), start3(), assert1()))
+    loop.run_until_complete(asyncio.gather(start1(), start2(), start3(), start4(), start5(), assert1()))
